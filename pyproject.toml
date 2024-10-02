@@ -58,3 +58,9 @@ ignore = [
 # so we disable it here to avoid duplicate errors
 reportUnusedImport = false
 typeCheckingMode = "basic"
+
+[tool.uv]
+dev-dependencies = [
+    "pyright>=1.1.383",
+    "ruff>=0.6.8",
+]
