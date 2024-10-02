@@ -30,7 +30,7 @@
 #  - Secure Notes
 #  - Identities
 #  - Sends (Optional)
-# 
+#
 #
 # Usage: ./BitwardenDecrypt.py [options] (reads data.json from current directory)
 #        or
@@ -44,31 +44,35 @@
 
 import argparse
 import base64
-from   collections import OrderedDict
 import getpass
 import json
 import os
 import re
 import sys
 import uuid
-
+from collections import OrderedDict
 
 # This script depends on the 'cryptography' package
 # pip install cryptography
 try:
-    from cryptography.hazmat.backends                   import default_backend
-    from cryptography.hazmat.primitives                 import ciphers, kdf, hashes, hmac, padding
-    from cryptography.hazmat.primitives.kdf.pbkdf2      import PBKDF2HMAC
-    from cryptography.hazmat.primitives.kdf.hkdf        import HKDF, HKDFExpand
-    from cryptography.hazmat.primitives.ciphers         import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives.asymmetric      import rsa, padding as asymmetricpadding
-    from cryptography.hazmat.primitives.serialization   import load_der_private_key
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import ciphers, hashes, hmac, kdf, padding
+    from cryptography.hazmat.primitives.asymmetric import (
+        padding as asymmetricpadding,
+    )
+    from cryptography.hazmat.primitives.asymmetric import (
+        rsa,
+    )
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.primitives.serialization import load_der_private_key
 
 except ModuleNotFoundError:
     print("This script depends on the 'cryptography' package")
     print("pip install cryptography")
     sys.exit(1)
-    
+
 # This script depends on the 'argon2-cffi' package
 # pip install argon2-cffi
 try:
@@ -77,126 +81,159 @@ try:
 except ModuleNotFoundError:
     print("This script depends on the 'argon2-cffi' package")
     print("pip install argon2-cffi")
-    sys.exit(1)    
+    sys.exit(1)
 
 BitwardenSecrets = {}
 
-def getBitwardenSecrets(email, password, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey):
-    BitwardenSecrets['email']           = email
-    BitwardenSecrets['kdfIterations']   = kdfIterations
-    BitwardenSecrets['kdfMemory']   = kdfMemory
-    BitwardenSecrets['kdfParallelism']   = kdfParallelism
-    BitwardenSecrets['kdfType']   = kdfType
-    BitwardenSecrets['MasterPassword']  = password
-    BitwardenSecrets['ProtectedSymmetricKey'] = encKey
-    BitwardenSecrets['ProtectedRSAPrivateKey'] = encPrivateKey
 
+def getBitwardenSecrets(
+    email,
+    password,
+    kdfIterations,
+    kdfMemory,
+    kdfParallelism,
+    kdfType,
+    encKey,
+    encPrivateKey,
+):
+    BitwardenSecrets["email"] = email
+    BitwardenSecrets["kdfIterations"] = kdfIterations
+    BitwardenSecrets["kdfMemory"] = kdfMemory
+    BitwardenSecrets["kdfParallelism"] = kdfParallelism
+    BitwardenSecrets["kdfType"] = kdfType
+    BitwardenSecrets["MasterPassword"] = password
+    BitwardenSecrets["ProtectedSymmetricKey"] = encKey
+    BitwardenSecrets["ProtectedRSAPrivateKey"] = encPrivateKey
 
-    if (BitwardenSecrets['kdfType']==1):
-        #argon2id
-        ph = hashes.Hash(hashes.SHA256(),default_backend())
-        ph.update(bytes(BitwardenSecrets['email'], 'utf-8'))
+    if BitwardenSecrets["kdfType"] == 1:
+        # argon2id
+        ph = hashes.Hash(hashes.SHA256(), default_backend())
+        ph.update(bytes(BitwardenSecrets["email"], "utf-8"))
         saltHash = ph.finalize()
-        BitwardenSecrets['MasterKey'] = argon2.low_level.hash_secret_raw(
-            BitwardenSecrets['MasterPassword'],
+        BitwardenSecrets["MasterKey"] = argon2.low_level.hash_secret_raw(
+            BitwardenSecrets["MasterPassword"],
             saltHash,
-            time_cost=BitwardenSecrets['kdfIterations'],
-            memory_cost=BitwardenSecrets['kdfMemory'] * 1024,
-            parallelism=BitwardenSecrets['kdfParallelism'],
+            time_cost=BitwardenSecrets["kdfIterations"],
+            memory_cost=BitwardenSecrets["kdfMemory"] * 1024,
+            parallelism=BitwardenSecrets["kdfParallelism"],
             hash_len=32,
-            type=argon2.low_level.Type.ID
-            )
-        BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
-    
+            type=argon2.low_level.Type.ID,
+        )
+        BitwardenSecrets["MasterKey_b64"] = base64.b64encode(
+            BitwardenSecrets["MasterKey"]
+        ).decode("utf-8")
+
     else:
-        #PBKDF2HMAC
+        # PBKDF2HMAC
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=bytes(BitwardenSecrets['email'], 'utf-8'),
-            iterations=BitwardenSecrets['kdfIterations'],
-            backend=default_backend()
-            )
-        BitwardenSecrets['MasterKey']       = kdf.derive(BitwardenSecrets['MasterPassword'])
-        BitwardenSecrets['MasterKey_b64']   = base64.b64encode(BitwardenSecrets['MasterKey']).decode('utf-8')
+            salt=bytes(BitwardenSecrets["email"], "utf-8"),
+            iterations=BitwardenSecrets["kdfIterations"],
+            backend=default_backend(),
+        )
+        BitwardenSecrets["MasterKey"] = kdf.derive(BitwardenSecrets["MasterPassword"])
+        BitwardenSecrets["MasterKey_b64"] = base64.b64encode(
+            BitwardenSecrets["MasterKey"]
+        ).decode("utf-8")
 
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=bytes(BitwardenSecrets['MasterPassword']),
+        salt=bytes(BitwardenSecrets["MasterPassword"]),
         iterations=1,
-        backend=default_backend()
-        )
-    BitwardenSecrets['MasterPasswordHash']  = base64.b64encode(kdf.derive(BitwardenSecrets['MasterKey'])).decode('utf-8')
-
-
-    hkdf = HKDFExpand(
-        algorithm=hashes.SHA256(),
-        length=32,
-        info=b"enc",
-        backend=default_backend()
-        )
-    BitwardenSecrets['StretchedEncryptionKey']      = hkdf.derive(BitwardenSecrets['MasterKey'])
-    BitwardenSecrets['StretchedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedEncryptionKey']).decode('utf-8')
+        backend=default_backend(),
+    )
+    BitwardenSecrets["MasterPasswordHash"] = base64.b64encode(
+        kdf.derive(BitwardenSecrets["MasterKey"])
+    ).decode("utf-8")
 
     hkdf = HKDFExpand(
-        algorithm=hashes.SHA256(),
-        length=32,
-        info=b"mac",
-        backend=default_backend()
-        )
-    BitwardenSecrets['StretchedMACKey']     = hkdf.derive(BitwardenSecrets['MasterKey'])
-    BitwardenSecrets['StretchedMACKey_b64'] = base64.b64encode(BitwardenSecrets['StretchedMACKey']).decode('utf-8')
+        algorithm=hashes.SHA256(), length=32, info=b"enc", backend=default_backend()
+    )
+    BitwardenSecrets["StretchedEncryptionKey"] = hkdf.derive(
+        BitwardenSecrets["MasterKey"]
+    )
+    BitwardenSecrets["StretchedEncryptionKey_b64"] = base64.b64encode(
+        BitwardenSecrets["StretchedEncryptionKey"]
+    ).decode("utf-8")
 
-    BitwardenSecrets['StretchedMasterKey']      = BitwardenSecrets['StretchedEncryptionKey'] + BitwardenSecrets['StretchedMACKey']
-    BitwardenSecrets['StretchedMasterKey_b64']  = base64.b64encode(BitwardenSecrets['StretchedMasterKey']).decode('utf-8')
+    hkdf = HKDFExpand(
+        algorithm=hashes.SHA256(), length=32, info=b"mac", backend=default_backend()
+    )
+    BitwardenSecrets["StretchedMACKey"] = hkdf.derive(BitwardenSecrets["MasterKey"])
+    BitwardenSecrets["StretchedMACKey_b64"] = base64.b64encode(
+        BitwardenSecrets["StretchedMACKey"]
+    ).decode("utf-8")
 
-    BitwardenSecrets['GeneratedSymmetricKey'], \
-    BitwardenSecrets['GeneratedEncryptionKey'], \
-    BitwardenSecrets['GeneratedMACKey']             = decryptProtectedSymmetricKey(BitwardenSecrets['ProtectedSymmetricKey'], BitwardenSecrets['StretchedEncryptionKey'], BitwardenSecrets['StretchedMACKey'])
-    BitwardenSecrets['GeneratedSymmetricKey_b64']   = base64.b64encode(BitwardenSecrets['GeneratedSymmetricKey']).decode('utf-8')
-    BitwardenSecrets['GeneratedEncryptionKey_b64']  = base64.b64encode(BitwardenSecrets['GeneratedEncryptionKey']).decode('utf-8')
-    BitwardenSecrets['GeneratedMACKey_b64']         = base64.b64encode(BitwardenSecrets['GeneratedMACKey']).decode('utf-8')
+    BitwardenSecrets["StretchedMasterKey"] = (
+        BitwardenSecrets["StretchedEncryptionKey"] + BitwardenSecrets["StretchedMACKey"]
+    )
+    BitwardenSecrets["StretchedMasterKey_b64"] = base64.b64encode(
+        BitwardenSecrets["StretchedMasterKey"]
+    ).decode("utf-8")
 
+    (
+        BitwardenSecrets["GeneratedSymmetricKey"],
+        BitwardenSecrets["GeneratedEncryptionKey"],
+        BitwardenSecrets["GeneratedMACKey"],
+    ) = decryptProtectedSymmetricKey(
+        BitwardenSecrets["ProtectedSymmetricKey"],
+        BitwardenSecrets["StretchedEncryptionKey"],
+        BitwardenSecrets["StretchedMACKey"],
+    )
+    BitwardenSecrets["GeneratedSymmetricKey_b64"] = base64.b64encode(
+        BitwardenSecrets["GeneratedSymmetricKey"]
+    ).decode("utf-8")
+    BitwardenSecrets["GeneratedEncryptionKey_b64"] = base64.b64encode(
+        BitwardenSecrets["GeneratedEncryptionKey"]
+    ).decode("utf-8")
+    BitwardenSecrets["GeneratedMACKey_b64"] = base64.b64encode(
+        BitwardenSecrets["GeneratedMACKey"]
+    ).decode("utf-8")
 
-    BitwardenSecrets['RSAPrivateKey'] = decryptRSAPrivateKey(BitwardenSecrets['ProtectedRSAPrivateKey'], \
-                                                            BitwardenSecrets['GeneratedEncryptionKey'], \
-                                                            BitwardenSecrets['GeneratedMACKey'])
+    BitwardenSecrets["RSAPrivateKey"] = decryptRSAPrivateKey(
+        BitwardenSecrets["ProtectedRSAPrivateKey"],
+        BitwardenSecrets["GeneratedEncryptionKey"],
+        BitwardenSecrets["GeneratedMACKey"],
+    )
 
     return
 
 
-
 def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
-    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
+    encType = int(
+        CipherString.split(".")[0]
+    )  # Not Currently Used, Assuming EncryptionType: 2
     if encType != 2:
-        print(f"ERROR: Protected Symmetric Key was not decrypted. Unsupported EncryptionType: {encType}\n\n"
-              "Rotating your account encryption key should resolve this for future backups of data.json.\n"
-              "Unfortunately a new sync/backup will be required after rotaion. \n\n\n"
-              "https://bitwarden.com/help/account-encryption-key/#rotate-your-encryption-key")
+        print(
+            f"ERROR: Protected Symmetric Key was not decrypted. Unsupported EncryptionType: {encType}\n\n"
+            "Rotating your account encryption key should resolve this for future backups of data.json.\n"
+            "Unfortunately a new sync/backup will be required after rotaion. \n\n\n"
+            "https://bitwarden.com/help/account-encryption-key/#rotate-your-encryption-key"
+        )
         exit(1)
 
-    iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
-    ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
-    mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
-
-
+    iv = base64.b64decode(CipherString.split(".")[1].split("|")[0])
+    ciphertext = base64.b64decode(CipherString.split(".")[1].split("|")[1])
+    mac = base64.b64decode(CipherString.split(".")[1].split("|")[2])
 
     # Calculate CipherString MAC
     h = hmac.HMAC(mastermac, hashes.SHA256(), backend=default_backend())
     h.update(iv)
     h.update(ciphertext)
     calculatedMAC = h.finalize()
-    
+
     if mac != calculatedMAC:
-        print("ERROR: MAC did not match. Protected Symmetric Key was not decrypted. (Password may be wrong)")
+        print(
+            "ERROR: MAC did not match. Protected Symmetric Key was not decrypted. (Password may be wrong)"
+        )
         sys.exit(1)
 
-
-    unpadder    = padding.PKCS7(128).unpadder()
-    cipher      = Cipher(algorithms.AES(masterkey), modes.CBC(iv), backend=default_backend())
-    decryptor   = cipher.decryptor() 
-    decrypted   = decryptor.update(ciphertext) + decryptor.finalize()
+    unpadder = padding.PKCS7(128).unpadder()
+    cipher = Cipher(algorithms.AES(masterkey), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    decrypted = decryptor.update(ciphertext) + decryptor.finalize()
 
     try:
         cleartext = unpadder.update(decrypted) + unpadder.finalize()
@@ -205,54 +242,23 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
         print("Wrong Password. Could Not Decode Protected Symmetric Key.")
         sys.exit(1)
 
-    stretchedmasterkey  = cleartext
-    enc                 = stretchedmasterkey[0:32]
-    mac                 = stretchedmasterkey[32:64]
+    stretchedmasterkey = cleartext
+    enc = stretchedmasterkey[0:32]
+    mac = stretchedmasterkey[32:64]
 
-    return([stretchedmasterkey,enc,mac])
+    return [stretchedmasterkey, enc, mac]
 
 
 def decryptRSAPrivateKey(CipherString, key, mackey):
     if not CipherString:
-        return(None)
+        return None
 
-    
-    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
-    iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
-    ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
-    mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
-
-
-    # Calculate CipherString MAC
-    h = hmac.HMAC(mackey, hashes.SHA256(), backend=default_backend())
-    h.update(iv)
-    h.update(ciphertext)
-    calculatedMAC = h.finalize()
-
-    if mac == calculatedMAC:       
-        unpadder    = padding.PKCS7(128).unpadder()
-        cipher      = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-        decryptor   = cipher.decryptor() 
-        decrypted   = decryptor.update(ciphertext) + decryptor.finalize()
-        cleartext   = unpadder.update(decrypted) + unpadder.finalize()
-
-        return(cleartext)
-
-    else:
-        return("ERROR: MAC did not match. RSA Private Key not decrypted.")
-
-
-
-def decryptCipherString(CipherString, key, mackey):
-    if not CipherString:
-        return(None)
-
-    
-    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 2
-    iv          = base64.b64decode(CipherString.split(".")[1].split("|")[0])
-    ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[1])
-    mac         = base64.b64decode(CipherString.split(".")[1].split("|")[2])
-
+    encType = int(
+        CipherString.split(".")[0]
+    )  # Not Currently Used, Assuming EncryptionType: 2
+    iv = base64.b64decode(CipherString.split(".")[1].split("|")[0])
+    ciphertext = base64.b64decode(CipherString.split(".")[1].split("|")[1])
+    mac = base64.b64decode(CipherString.split(".")[1].split("|")[2])
 
     # Calculate CipherString MAC
     h = hmac.HMAC(mackey, hashes.SHA256(), backend=default_backend())
@@ -261,64 +267,112 @@ def decryptCipherString(CipherString, key, mackey):
     calculatedMAC = h.finalize()
 
     if mac == calculatedMAC:
-        unpadder    = padding.PKCS7(128).unpadder()
-        cipher      = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-        decryptor   = cipher.decryptor() 
-        decrypted   = decryptor.update(ciphertext) + decryptor.finalize()
-        cleartext   = unpadder.update(decrypted) + unpadder.finalize()
+        unpadder = padding.PKCS7(128).unpadder()
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        cleartext = unpadder.update(decrypted) + unpadder.finalize()
+
+        return cleartext
+
+    else:
+        return "ERROR: MAC did not match. RSA Private Key not decrypted."
+
+
+def decryptCipherString(CipherString, key, mackey):
+    if not CipherString:
+        return None
+
+    encType = int(
+        CipherString.split(".")[0]
+    )  # Not Currently Used, Assuming EncryptionType: 2
+    iv = base64.b64decode(CipherString.split(".")[1].split("|")[0])
+    ciphertext = base64.b64decode(CipherString.split(".")[1].split("|")[1])
+    mac = base64.b64decode(CipherString.split(".")[1].split("|")[2])
+
+    # Calculate CipherString MAC
+    h = hmac.HMAC(mackey, hashes.SHA256(), backend=default_backend())
+    h.update(iv)
+    h.update(ciphertext)
+    calculatedMAC = h.finalize()
+
+    if mac == calculatedMAC:
+        unpadder = padding.PKCS7(128).unpadder()
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        cleartext = unpadder.update(decrypted) + unpadder.finalize()
 
         try:
-            cleartext = cleartext.decode('utf-8')
+            cleartext = cleartext.decode("utf-8")
         except UnicodeDecodeError as e:
             try:
                 # Try to decrypt CipherString as an Attachment Protected Symmetric Key
-                cleartext = decryptProtectedSymmetricKey(CipherString, BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0].hex()
+                cleartext = decryptProtectedSymmetricKey(
+                    CipherString,
+                    BitwardenSecrets["GeneratedEncryptionKey"],
+                    BitwardenSecrets["GeneratedMACKey"],
+                )[0].hex()
             except Exception as e:
                 cleartext = f"ERROR Decrypting: {CipherString}"
 
-        
-        return(cleartext)
+        return cleartext
 
     else:
-        return("ERROR: MAC did not match. CipherString not decrypted.")
+        return "ERROR: MAC did not match. CipherString not decrypted."
 
 
 def decryptRSA(CipherString, key):
-    encType     = int(CipherString.split(".")[0])   # Not Currently Used, Assuming EncryptionType: 4
-    ciphertext  = base64.b64decode(CipherString.split(".")[1].split("|")[0])
+    encType = int(
+        CipherString.split(".")[0]
+    )  # Not Currently Used, Assuming EncryptionType: 4
+    ciphertext = base64.b64decode(CipherString.split(".")[1].split("|")[0])
     private_key = load_der_private_key(key, password=None, backend=default_backend())
 
-    cleartext = private_key.decrypt(ciphertext, asymmetricpadding.OAEP(mgf=asymmetricpadding.MGF1(algorithm=hashes.SHA1()), \
-                                                                        algorithm=hashes.SHA1(), \
-                                                                        label=None))
+    cleartext = private_key.decrypt(
+        ciphertext,
+        asymmetricpadding.OAEP(
+            mgf=asymmetricpadding.MGF1(algorithm=hashes.SHA1()),
+            algorithm=hashes.SHA1(),
+            label=None,
+        ),
+    )
 
-    return(cleartext)
+    return cleartext
+
 
 def decryptSend(send):
-    sendKey = decryptProtectedSymmetricKey(send['key'], BitwardenSecrets['GeneratedEncryptionKey'], BitwardenSecrets['GeneratedMACKey'])[0]
-    
+    sendKey = decryptProtectedSymmetricKey(
+        send["key"],
+        BitwardenSecrets["GeneratedEncryptionKey"],
+        BitwardenSecrets["GeneratedMACKey"],
+    )[0]
+
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=64,
         salt=b"bitwarden-send",
         info=b"send",
-        backend=default_backend()
-        )
+        backend=default_backend(),
+    )
     sendStretchedKey = hkdf.derive(sendKey)
     sendEncKey = sendStretchedKey[0:32]
     sendMACKey = sendStretchedKey[32:64]
 
-    send['key'] = sendStretchedKey.hex()
+    send["key"] = sendStretchedKey.hex()
     decryptedSend = json.dumps(send)
 
     regexPattern = re.compile(r"\d\.[^,]+\|[^,]+=+")
-    
-    for match in regexPattern.findall(decryptedSend):    
-        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, sendEncKey, sendMACKey))
-        jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
+
+    for match in regexPattern.findall(decryptedSend):
+        jsonEscapedString = json.JSONEncoder().encode(
+            decryptCipherString(match, sendEncKey, sendMACKey)
+        )
+        jsonEscapedString = jsonEscapedString[1 : (len(jsonEscapedString) - 1)]
         decryptedSend = decryptedSend.replace(match, jsonEscapedString)
 
-    return(decryptedSend)
+    return decryptedSend
+
 
 def isUUID(value):
     try:
@@ -327,14 +381,14 @@ def isUUID(value):
     except ValueError:
         return False
 
-def checkFileFormatVersion(options):
 
+def checkFileFormatVersion(options):
     options.account = {}
     email = None
     kdfIterations = None
     kdfMemory = None
     kdfParallelism = None
-    kdfType = None    
+    kdfType = None
     encKey = None
     encPrivateKey = None
 
@@ -347,7 +401,6 @@ def checkFileFormatVersion(options):
     except Exception as e:
         print(f"ERROR: An error occurred reading: {options.inputfile}")
         sys.exit(1)
-    
 
     # Check if datafile is a password protected encrypted json export.
     if datafile.get("encrypted") and datafile.get("passwordProtected"):
@@ -356,7 +409,7 @@ def checkFileFormatVersion(options):
         # Email address is used as the salt in data.json, in password protected excrypted json exports there is an explicit salt key/value (and no email).
         email = datafile.get("salt")
         kdfIterations = int(datafile.get("kdfIterations"))
-        kdfType = 0         
+        kdfType = 0
         encKey = datafile.get("encKeyValidation_DO_NOT_EDIT")
 
     # Check if data.json is 2024/new/old format.
@@ -364,103 +417,133 @@ def checkFileFormatVersion(options):
         options.fileformat = "2024"
         accounts = []
 
-        for key in datafile['global_account_accounts']:
-            if isUUID(key) and len(datafile['global_account_accounts'][key]) > 0:
-                options.account['UUID'] = key
-                options.account['email'] = datafile['global_account_accounts'][key]['email']
+        for key in datafile["global_account_accounts"]:
+            if isUUID(key) and len(datafile["global_account_accounts"][key]) > 0:
+                options.account["UUID"] = key
+                options.account["email"] = datafile["global_account_accounts"][key][
+                    "email"
+                ]
 
-                accounts.append((options.account['UUID'], options.account['email']))
-        
+                accounts.append((options.account["UUID"], options.account["email"]))
+
         # If data.json contains no accounts then exit.
         # This occurs when the desktop app logs out and clears account data from data.json
-        if (len(accounts) == 0):
+        if len(accounts) == 0:
             print(f"ERROR: No Accounts Found In {options.inputfile}")
             exit(1)
-        
+
         # If data.json contains multiple accounts, prompt to select which to decrypt.
-        if (len(accounts) > 1):
+        if len(accounts) > 1:
             print("Which Account Would You Like To Decrypt?")
 
             for index, account in enumerate(accounts):
                 print(f" {index+1}:\t{account[1]}")
-            
+
             choice = 0
             print()
-            while (choice < 1 ) or (choice > len(accounts) ):
+            while (choice < 1) or (choice > len(accounts)):
                 print("Enter Number: ", end="")
                 try:
                     choice = int(input())
                 except ValueError:
                     choice = 0
             print()
-            
-            options.account['UUID'] = accounts[choice-1][0]
-            options.account['email'] = accounts[choice-1][1]
 
-        email = options.account['email']
-        kdfIterations = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['iterations']
-        if ('memory' in datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']):
-            kdfMemory = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['memory']
-        if ('parallelism' in datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']):    
-            kdfParallelism = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['parallelism']
-        kdfType = datafile['user_' + options.account['UUID'] + '_kdfConfig_kdfConfig']['kdfType']
-        encKey = datafile['user_' + options.account['UUID'] + '_masterPassword_masterKeyEncryptedUserKey']
-        encPrivateKey = datafile['user_' + options.account['UUID'] + '_crypto_privateKey']
-    
+            options.account["UUID"] = accounts[choice - 1][0]
+            options.account["email"] = accounts[choice - 1][1]
+
+        email = options.account["email"]
+        kdfIterations = datafile[
+            "user_" + options.account["UUID"] + "_kdfConfig_kdfConfig"
+        ]["iterations"]
+        if (
+            "memory"
+            in datafile["user_" + options.account["UUID"] + "_kdfConfig_kdfConfig"]
+        ):
+            kdfMemory = datafile[
+                "user_" + options.account["UUID"] + "_kdfConfig_kdfConfig"
+            ]["memory"]
+        if (
+            "parallelism"
+            in datafile["user_" + options.account["UUID"] + "_kdfConfig_kdfConfig"]
+        ):
+            kdfParallelism = datafile[
+                "user_" + options.account["UUID"] + "_kdfConfig_kdfConfig"
+            ]["parallelism"]
+        kdfType = datafile["user_" + options.account["UUID"] + "_kdfConfig_kdfConfig"][
+            "kdfType"
+        ]
+        encKey = datafile[
+            "user_"
+            + options.account["UUID"]
+            + "_masterPassword_masterKeyEncryptedUserKey"
+        ]
+        encPrivateKey = datafile[
+            "user_" + options.account["UUID"] + "_crypto_privateKey"
+        ]
+
     elif datafile.get("userEmail") is None:
         options.fileformat = "NEW"
         accounts = []
 
         for key in datafile:
-            if isUUID(key) and len(datafile[key]['profile']) > 0:
-                options.account['UUID'] = key
-                options.account['email'] = datafile[key]['profile']['email']
+            if isUUID(key) and len(datafile[key]["profile"]) > 0:
+                options.account["UUID"] = key
+                options.account["email"] = datafile[key]["profile"]["email"]
 
-                accounts.append((options.account['UUID'], options.account['email']))
-        
+                accounts.append((options.account["UUID"], options.account["email"]))
+
         # If data.json contains no accounts then exit.
         # This occurs when the desktop app logs out and clears account data from data.json
-        if (len(accounts) == 0):
+        if len(accounts) == 0:
             print(f"ERROR: No Accounts Found In {options.inputfile}")
             exit(1)
-        
+
         # If data.json contains multiple accounts, prompt to select which to decrypt.
-        if (len(accounts) > 1):
+        if len(accounts) > 1:
             print("Which Account Would You Like To Decrypt?")
 
             for index, account in enumerate(accounts):
                 print(f" {index+1}:\t{account[1]}")
-            
+
             choice = 0
             print()
-            while (choice < 1 ) or (choice > len(accounts) ):
+            while (choice < 1) or (choice > len(accounts)):
                 print("Enter Number: ", end="")
                 try:
                     choice = int(input())
                 except ValueError:
                     choice = 0
             print()
-            
-            options.account['UUID'] = accounts[choice-1][0]
-            options.account['email'] = accounts[choice-1][1]
 
-        email = options.account['email']
-        kdfIterations = datafile[options.account['UUID']]['profile']['kdfIterations']
-        if ('kdfMemory' in datafile[options.account['UUID']]['profile']):
-            kdfMemory = datafile[options.account['UUID']]['profile']['kdfMemory']
-        if ('kdfParallelism' in datafile[options.account['UUID']]['profile']):    
-            kdfParallelism = datafile[options.account['UUID']]['profile']['kdfParallelism']
-        kdfType = datafile[options.account['UUID']]['profile']['kdfType']
-        if ('masterKeyEncryptedUserKey' in datafile[options.account['UUID']]['keys']):
-            encKey = datafile[options.account['UUID']]['keys']['masterKeyEncryptedUserKey']
+            options.account["UUID"] = accounts[choice - 1][0]
+            options.account["email"] = accounts[choice - 1][1]
+
+        email = options.account["email"]
+        kdfIterations = datafile[options.account["UUID"]]["profile"]["kdfIterations"]
+        if "kdfMemory" in datafile[options.account["UUID"]]["profile"]:
+            kdfMemory = datafile[options.account["UUID"]]["profile"]["kdfMemory"]
+        if "kdfParallelism" in datafile[options.account["UUID"]]["profile"]:
+            kdfParallelism = datafile[options.account["UUID"]]["profile"][
+                "kdfParallelism"
+            ]
+        kdfType = datafile[options.account["UUID"]]["profile"]["kdfType"]
+        if "masterKeyEncryptedUserKey" in datafile[options.account["UUID"]]["keys"]:
+            encKey = datafile[options.account["UUID"]]["keys"][
+                "masterKeyEncryptedUserKey"
+            ]
         else:
-            encKey = datafile[options.account['UUID']]['keys']['cryptoSymmetricKey']['encrypted']
-        encPrivateKey = datafile[options.account['UUID']]['keys']['privateKey']['encrypted']
+            encKey = datafile[options.account["UUID"]]["keys"]["cryptoSymmetricKey"][
+                "encrypted"
+            ]
+        encPrivateKey = datafile[options.account["UUID"]]["keys"]["privateKey"][
+            "encrypted"
+        ]
 
     else:
         options.fileformat = "OLD"
-        options.account['UUID'] = datafile.get("userId")
-        options.account['email'] = datafile.get("userEmail")
+        options.account["UUID"] = datafile.get("userId")
+        options.account["email"] = datafile.get("userEmail")
 
         email = datafile.get("userEmail")
         kdfIterations = datafile.get("kdfIterations")
@@ -470,7 +553,15 @@ def checkFileFormatVersion(options):
 
     f.close()
 
-    return email, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey
+    return (
+        email,
+        kdfIterations,
+        kdfMemory,
+        kdfParallelism,
+        kdfType,
+        encKey,
+        encPrivateKey,
+    )
 
 
 def decryptBitwardenJSON(options):
@@ -486,118 +577,158 @@ def decryptBitwardenJSON(options):
         print(f"ERROR: An error occurred reading: {options.inputfile}")
         sys.exit(1)
 
-
-    email, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey = checkFileFormatVersion(options)
+    email, kdfIterations, kdfMemory, kdfParallelism, kdfType, encKey, encPrivateKey = (
+        checkFileFormatVersion(options)
+    )
 
     # Set prompt text for when entering password.
     prompt_text = "EncryptedJSON" if options.fileformat == "EncryptedJSON" else email
 
-    getBitwardenSecrets(email, \
-        getpass.getpass(prompt = f"Enter Password ({prompt_text}):").encode("utf-8"), \
-        kdfIterations, \
-        kdfMemory, \
-        kdfParallelism, \
-        kdfType, \
-        encKey, \
-        encPrivateKey)
+    getBitwardenSecrets(
+        email,
+        getpass.getpass(prompt=f"Enter Password ({prompt_text}):").encode("utf-8"),
+        kdfIterations,
+        kdfMemory,
+        kdfParallelism,
+        kdfType,
+        encKey,
+        encPrivateKey,
+    )
 
+    BitwardenSecrets["OrgSecrets"] = {}
 
-    BitwardenSecrets['OrgSecrets'] = {}
-    
     # RegEx to find CipherString
     regexPattern = re.compile(r"\d\.[^,]+\|[^,]+=+")
 
-    if (options.fileformat == "EncryptedJSON"):
+    if options.fileformat == "EncryptedJSON":
         EncryptedJSON = datafile.get("data")
 
-        encKey = BitwardenSecrets['StretchedEncryptionKey']
-        macKey = BitwardenSecrets['StretchedMACKey']
+        encKey = BitwardenSecrets["StretchedEncryptionKey"]
+        macKey = BitwardenSecrets["StretchedMACKey"]
 
-        decryptedEntries = OrderedDict(json.loads(decryptCipherString(EncryptedJSON, encKey, macKey)))
+        decryptedEntries = OrderedDict(
+            json.loads(decryptCipherString(EncryptedJSON, encKey, macKey))
+        )
 
-    elif (options.fileformat == "2024"):
+    elif options.fileformat == "2024":
         # data.json file format changed in year 2024 - version 2024.7.1
 
-        organizationKeys = datafile['user_' + options.account['UUID'] + '_crypto_organizationKeys']
+        organizationKeys = datafile[
+            "user_" + options.account["UUID"] + "_crypto_organizationKeys"
+        ]
 
         # Get/Decrypt All Organization Keys
-        if len(datafile['user_' + options.account['UUID'] + '_crypto_organizationKeys']) > 0:
+        if (
+            len(
+                datafile["user_" + options.account["UUID"] + "_crypto_organizationKeys"]
+            )
+            > 0
+        ):
             for uuid, value in organizationKeys.items():
                 # File Format >= Desktop 2022.8.0
                 if type(value) is dict:
-                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value['key'], BitwardenSecrets['RSAPrivateKey'])
+                    BitwardenSecrets["OrgSecrets"][uuid] = decryptRSA(
+                        value["key"], BitwardenSecrets["RSAPrivateKey"]
+                    )
                 # File Format < Desktop 2022.8.0
                 elif type(value) is str:
-                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value, BitwardenSecrets['RSAPrivateKey'])
+                    BitwardenSecrets["OrgSecrets"][uuid] = decryptRSA(
+                        value, BitwardenSecrets["RSAPrivateKey"]
+                    )
                 else:
-                    print(f"ERROR: Could Not Determine Organization Keys From File Format")
-        
-        supportedGroups = ['folder_folders', 'ciphers_ciphers', 'collection_collections', 'organizations_organizations']        
+                    print(
+                        f"ERROR: Could Not Determine Organization Keys From File Format"
+                    )
+
+        supportedGroups = [
+            "folder_folders",
+            "ciphers_ciphers",
+            "collection_collections",
+            "organizations_organizations",
+        ]
 
         for group in supportedGroups:
+            groupData = datafile["user_" + options.account["UUID"] + "_" + group]
 
-            groupData = datafile['user_' + options.account['UUID'] + '_' + group]
-            
             groupItemsList = []
-            
+
             for b in groupData.items():
                 groupEntries = list(b)
 
                 for groupItem in groupEntries:
-
                     if type(groupItem) is dict:
                         tempString = json.dumps(groupItem)
 
                         try:
-                            if groupItem.get('organizationId') is None:
-                                encKey = BitwardenSecrets['GeneratedEncryptionKey']
-                                macKey = BitwardenSecrets['GeneratedMACKey']
+                            if groupItem.get("organizationId") is None:
+                                encKey = BitwardenSecrets["GeneratedEncryptionKey"]
+                                macKey = BitwardenSecrets["GeneratedMACKey"]
                             else:
-                                encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
-                                macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
-                                    
-                            # Cipher Key decryption    
-                            if groupItem.get('key', None) is None:
+                                encKey = BitwardenSecrets["OrgSecrets"][
+                                    groupItem["organizationId"]
+                                ][0:32]
+                                macKey = BitwardenSecrets["OrgSecrets"][
+                                    groupItem["organizationId"]
+                                ][32:64]
+
+                            # Cipher Key decryption
+                            if groupItem.get("key", None) is None:
                                 cipherEncKey = encKey
                                 cipherMacKey = macKey
                             else:
-                                cipherKey, \
-                                cipherEncKey, \
-                                cipherMacKey = decryptProtectedSymmetricKey(groupItem.get('key'), encKey, macKey) 
+                                cipherKey, cipherEncKey, cipherMacKey = (
+                                    decryptProtectedSymmetricKey(
+                                        groupItem.get("key"), encKey, macKey
+                                    )
+                                )
 
                             for match in regexPattern.findall(tempString):
-                                jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, cipherEncKey, cipherMacKey))
-                                jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
-                                tempString = tempString.replace(match, jsonEscapedString)
-                                tempString = tempString.replace('"key": "ERROR: MAC did not match. CipherString not decrypted."', '"key": ""')
+                                jsonEscapedString = json.JSONEncoder().encode(
+                                    decryptCipherString(
+                                        match, cipherEncKey, cipherMacKey
+                                    )
+                                )
+                                jsonEscapedString = jsonEscapedString[
+                                    1 : (len(jsonEscapedString) - 1)
+                                ]
+                                tempString = tempString.replace(
+                                    match, jsonEscapedString
+                                )
+                                tempString = tempString.replace(
+                                    '"key": "ERROR: MAC did not match. CipherString not decrypted."',
+                                    '"key": ""',
+                                )
 
                         except Exception as e:
-                            print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")
+                            print(
+                                f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}"
+                            )
 
                         # Get rid of the Bitwarden userId/organizationUserId key/value pair.
-                        regString =  r"\"(organization)*[uU]serId\":\s\"\S*\","
+                        regString = r"\"(organization)*[uU]serId\":\s\"\S*\","
                         tempString = re.sub(regString, "", tempString)
 
                         groupItemsList.append(json.loads(tempString))
 
                 # Change exported groups to be consistent with NEW format.
-                if (group == "folder_folders"):
+                if group == "folder_folders":
                     group = "folders"
-                elif (group == "ciphers_ciphers"):
+                elif group == "ciphers_ciphers":
                     group = "items"
-                elif (group == "collection_collections"):
+                elif group == "collection_collections":
                     group = "collections"
-                elif (group == "organizations_organizations"):
+                elif group == "organizations_organizations":
                     group = "organizations"
 
                 decryptedEntries[group] = groupItemsList
-                
-        #Sends
+
+        # Sends
         if options.includesends == True:
-            
-            groupData = datafile['user_' + options.account['UUID'] + '_encryptedSend_sendUserEncrypted']
+            groupData = datafile[
+                "user_" + options.account["UUID"] + "_encryptedSend_sendUserEncrypted"
+            ]
             groupItemsList = []
-            
+
             for b in groupData.items():
                 groupEntries = list(b)
 
@@ -607,192 +738,242 @@ def decryptBitwardenJSON(options):
                         groupItemsList.append(json.loads(tempString))
 
                 decryptedEntries["sends"] = groupItemsList
-    
-    elif (options.fileformat == "NEW"):
+
+    elif options.fileformat == "NEW":
         # data.json file format changed in v1.30+
 
-        datafile = datafile[options.account['UUID']]
-        organizationKeys = datafile['keys']['organizationKeys']['encrypted']
+        datafile = datafile[options.account["UUID"]]
+        organizationKeys = datafile["keys"]["organizationKeys"]["encrypted"]
 
         # Get/Decrypt All Organization Keys
-        if len(datafile['keys']['organizationKeys']['encrypted']) > 0:
+        if len(datafile["keys"]["organizationKeys"]["encrypted"]) > 0:
             for uuid, value in organizationKeys.items():
                 # File Format >= Desktop 2022.8.0
                 if type(value) is dict:
-                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value['key'], BitwardenSecrets['RSAPrivateKey'])
+                    BitwardenSecrets["OrgSecrets"][uuid] = decryptRSA(
+                        value["key"], BitwardenSecrets["RSAPrivateKey"]
+                    )
                 # File Format < Desktop 2022.8.0
                 elif type(value) is str:
-                    BitwardenSecrets['OrgSecrets'][uuid] = decryptRSA(value, BitwardenSecrets['RSAPrivateKey'])
+                    BitwardenSecrets["OrgSecrets"][uuid] = decryptRSA(
+                        value, BitwardenSecrets["RSAPrivateKey"]
+                    )
                 else:
-                    print(f"ERROR: Could Not Determine Organization Keys From File Format")
+                    print(
+                        f"ERROR: Could Not Determine Organization Keys From File Format"
+                    )
 
+        for a in datafile["data"]:
+            supportedGroups = ["folders", "ciphers", "collections", "organizations"]
 
-        for a in datafile['data']:
-
-            supportedGroups = ['folders', 'ciphers', 'collections', 'organizations']
-
-            if (any(x in a for x in supportedGroups)):
+            if any(x in a for x in supportedGroups):
                 group = a
             elif a == "sends" and options.includesends == True:
                 group = "sends"
             else:
                 group = None
-            
 
             if group:
-
                 if group == "organizations":
-                    groupData = datafile['data'][group]
+                    groupData = datafile["data"][group]
                 else:
-                    groupData = datafile['data'][group]['encrypted']
-                
+                    groupData = datafile["data"][group]["encrypted"]
+
                 groupItemsList = []
-            
+
                 for b in groupData.items():
                     groupEntries = list(b)
 
                     for groupItem in groupEntries:
-
                         if type(groupItem) is dict:
                             tempString = json.dumps(groupItem)
 
                             if group == "sends":
                                 tempString = decryptSend(groupItem)
-                            
+
                             else:
                                 try:
-                                    if groupItem.get('organizationId') is None:
-                                        encKey = BitwardenSecrets['GeneratedEncryptionKey']
-                                        macKey = BitwardenSecrets['GeneratedMACKey']
+                                    if groupItem.get("organizationId") is None:
+                                        encKey = BitwardenSecrets[
+                                            "GeneratedEncryptionKey"
+                                        ]
+                                        macKey = BitwardenSecrets["GeneratedMACKey"]
                                     else:
-                                        encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
-                                        macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
-                                    
-                                    # Cipher Key decryption    
-                                    if groupItem.get('key', None) is None:
+                                        encKey = BitwardenSecrets["OrgSecrets"][
+                                            groupItem["organizationId"]
+                                        ][0:32]
+                                        macKey = BitwardenSecrets["OrgSecrets"][
+                                            groupItem["organizationId"]
+                                        ][32:64]
+
+                                    # Cipher Key decryption
+                                    if groupItem.get("key", None) is None:
                                         cipherEncKey = encKey
                                         cipherMacKey = macKey
                                     else:
-                                        cipherKey, \
-                                        cipherEncKey, \
-                                        cipherMacKey = decryptProtectedSymmetricKey(groupItem.get('key'), encKey, macKey) 
+                                        cipherKey, cipherEncKey, cipherMacKey = (
+                                            decryptProtectedSymmetricKey(
+                                                groupItem.get("key"), encKey, macKey
+                                            )
+                                        )
 
                                     for match in regexPattern.findall(tempString):
-                                        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, cipherEncKey, cipherMacKey))
-                                        jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
-                                        tempString = tempString.replace(match, jsonEscapedString)
-                                        tempString = tempString.replace('"key": "ERROR: MAC did not match. CipherString not decrypted."', '"key": ""')
+                                        jsonEscapedString = json.JSONEncoder().encode(
+                                            decryptCipherString(
+                                                match, cipherEncKey, cipherMacKey
+                                            )
+                                        )
+                                        jsonEscapedString = jsonEscapedString[
+                                            1 : (len(jsonEscapedString) - 1)
+                                        ]
+                                        tempString = tempString.replace(
+                                            match, jsonEscapedString
+                                        )
+                                        tempString = tempString.replace(
+                                            '"key": "ERROR: MAC did not match. CipherString not decrypted."',
+                                            '"key": ""',
+                                        )
 
                                 except Exception as e:
-                                    print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")
+                                    print(
+                                        f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}"
+                                    )
 
                             # Get rid of the Bitwarden userId key/value pair.
                             userIdString = f"\"userId\": \"{options.account['UUID']}\","
-                            tempString = tempString.replace(userIdString, "")   
+                            tempString = tempString.replace(userIdString, "")
 
                             groupItemsList.append(json.loads(tempString))
 
                     # Bitwarden Apps export "ciphers" as "items", changed here to be consistent.
-                    if (group == "ciphers"):
+                    if group == "ciphers":
                         group = "items"
 
                     decryptedEntries[group] = groupItemsList
 
     # old data.json file format
     else:
-
         # Get/Decrypt All Organization Keys
         encOrgKeys = list(datafile["encOrgKeys"])
 
         for i in encOrgKeys:
-            BitwardenSecrets['OrgSecrets'][i] = decryptRSA(datafile["encOrgKeys"][i], BitwardenSecrets['RSAPrivateKey'])
+            BitwardenSecrets["OrgSecrets"][i] = decryptRSA(
+                datafile["encOrgKeys"][i], BitwardenSecrets["RSAPrivateKey"]
+            )
 
         for a in datafile:
-
-            if a.startswith('folders_'):
+            if a.startswith("folders_"):
                 group = "folders"
-            elif a.startswith('ciphers_'):
+            elif a.startswith("ciphers_"):
                 # Bitwarden Apps export "ciphers" as "items", changed here to be consistent.
                 group = "items"
-            elif a.startswith('organizations_'):
+            elif a.startswith("organizations_"):
                 group = "organizations"
-            elif a.startswith('collections_'):
+            elif a.startswith("collections_"):
                 group = "collections"
-            elif a.startswith('sends_') and options.includesends == True:
+            elif a.startswith("sends_") and options.includesends == True:
                 group = "sends"
             else:
                 group = None
 
-
             if group:
                 groupData = datafile[a]
                 groupItemsList = []
-        
+
                 for b in groupData.items():
                     groupEntries = list(b)
 
                     for groupItem in groupEntries:
-                        
                         if type(groupItem) is dict:
                             tempString = json.dumps(groupItem)
 
                             if group == "sends":
-                                tempString = decryptSend(groupItem)  
+                                tempString = decryptSend(groupItem)
 
                             else:
                                 try:
-                                    if groupItem.get('organizationId') is None:
-                                        encKey = BitwardenSecrets['GeneratedEncryptionKey']
-                                        macKey = BitwardenSecrets['GeneratedMACKey']
+                                    if groupItem.get("organizationId") is None:
+                                        encKey = BitwardenSecrets[
+                                            "GeneratedEncryptionKey"
+                                        ]
+                                        macKey = BitwardenSecrets["GeneratedMACKey"]
                                     else:
-                                        encKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][0:32]
-                                        macKey = BitwardenSecrets['OrgSecrets'][groupItem['organizationId']][32:64]
+                                        encKey = BitwardenSecrets["OrgSecrets"][
+                                            groupItem["organizationId"]
+                                        ][0:32]
+                                        macKey = BitwardenSecrets["OrgSecrets"][
+                                            groupItem["organizationId"]
+                                        ][32:64]
 
-                                    for match in regexPattern.findall(tempString):    
-                                        jsonEscapedString = json.JSONEncoder().encode(decryptCipherString(match, encKey, macKey))
-                                        jsonEscapedString = jsonEscapedString[1:(len(jsonEscapedString)-1)]
-                                        tempString = tempString.replace(match, jsonEscapedString)
+                                    for match in regexPattern.findall(tempString):
+                                        jsonEscapedString = json.JSONEncoder().encode(
+                                            decryptCipherString(match, encKey, macKey)
+                                        )
+                                        jsonEscapedString = jsonEscapedString[
+                                            1 : (len(jsonEscapedString) - 1)
+                                        ]
+                                        tempString = tempString.replace(
+                                            match, jsonEscapedString
+                                        )
 
                                 except Exception as e:
-                                    print(f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}")          
-                            
+                                    print(
+                                        f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}"
+                                    )
 
                             # Get rid of the Bitwarden userId key/value pair.
                             userIdString = f"\"userId\": \"{datafile['userId']}\","
-                            tempString = tempString.replace(userIdString, "")   
+                            tempString = tempString.replace(userIdString, "")
 
                             groupItemsList.append(json.loads(tempString))
-                        
+
                 decryptedEntries[group] = groupItemsList
 
     # Bitwarden exports always have "folders" first, not sure if it makes a difference for re-import.
-    if(decryptedEntries.get('folders')):
-        decryptedEntries.move_to_end('folders', False)
-    
-    # Move Sends to end.
-    if(decryptedEntries.get('sends')):
-        decryptedEntries.move_to_end('sends')
+    if decryptedEntries.get("folders"):
+        decryptedEntries.move_to_end("folders", False)
 
-    return(json.dumps(decryptedEntries, indent=2, ensure_ascii=False))
+    # Move Sends to end.
+    if decryptedEntries.get("sends"):
+        decryptedEntries.move_to_end("sends")
+
+    return json.dumps(decryptedEntries, indent=2, ensure_ascii=False)
 
 
 def main():
-    parser = argparse.ArgumentParser(allow_abbrev=False, description='Decrypts an encrypted Bitwarden data.json file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE')
-    parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
-    parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE')
+    parser = argparse.ArgumentParser(
+        allow_abbrev=False,
+        description="Decrypts an encrypted Bitwarden data.json file.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("inputfile", nargs="?", default="data.json", help="INPUTFILE")
+    parser.add_argument(
+        "--includesends",
+        help="Include Sends in the output.",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--output",
+        metavar="OUTPUTFILE",
+        action="store",
+        dest="outputfile",
+        help="Saves decrypted output to OUTPUTFILE",
+    )
     options = parser.parse_args()
 
     print()
-    if (options.outputfile):
+    if options.outputfile:
         if os.path.isfile(options.outputfile):
-            print(f"Saving Output To: {options.outputfile} (File Exists, Will Be Overwritten)\n")
+            print(
+                f"Saving Output To: {options.outputfile} (File Exists, Will Be Overwritten)\n"
+            )
         else:
             print(f"Saving Output To: {options.outputfile}\n")
-    
+
     decryptedJSON = decryptBitwardenJSON(options)
 
-    if (options.outputfile):
+    if options.outputfile:
         try:
             with open(options.outputfile, "w", encoding="utf-8") as file:
                 file.write(decryptedJSON)
