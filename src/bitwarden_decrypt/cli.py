@@ -776,7 +776,13 @@ def decryptBitwardenJSON(options):
     return(json.dumps(decryptedEntries, indent=2, ensure_ascii=False))
 
 
-def main(options):
+def main():
+    parser = argparse.ArgumentParser(allow_abbrev=False, description='Decrypts an encrypted Bitwarden data.json file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE')
+    parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
+    parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE')
+    options = parser.parse_args()
+
     print()
     if (options.outputfile):
         if os.path.isfile(options.outputfile):
@@ -798,10 +804,4 @@ def main(options):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(allow_abbrev=False, description='Decrypts an encrypted Bitwarden data.json file.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("inputfile", nargs='?', default="data.json", help='INPUTFILE')
-    parser.add_argument("--includesends", help="Include Sends in the output.", action="store_true", default=False)
-    parser.add_argument("--output", metavar='OUTPUTFILE', action="store", dest='outputfile', help='Saves decrypted output to OUTPUTFILE')
-    args = parser.parse_args()
-
-    main(args)
+    main()
