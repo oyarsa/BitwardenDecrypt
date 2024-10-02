@@ -358,7 +358,7 @@ def checkFileFormatVersion(options):
         with open(options.inputfile, encoding="utf-8") as f:
             datafile = json.load(f)
     except FileNotFoundError:
-        print(f"ERROR: {options.inputfile} not found.")
+        print(f"ERROR: Input file {options.inputfile} not found.")
         sys.exit(1)
     except Exception:
         print(f"ERROR: An error occurred reading: {options.inputfile}")
@@ -532,7 +532,7 @@ def decryptBitwardenJSON(options):
         with open(options.inputfile, encoding="utf-8") as f:
             datafile = json.load(f)
     except FileNotFoundError:
-        print(f"ERROR: {options.inputfile} not found.")
+        print(f"ERROR: Input file {options.inputfile!r} not found.")
         sys.exit(1)
     except Exception:
         print(f"ERROR: An error occurred reading: {options.inputfile}")
