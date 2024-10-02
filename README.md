@@ -1,9 +1,9 @@
 # BitwardenDecrypt
 Decrypts an encrypted [Bitwarden](https://github.com/bitwarden) data.json file (from the
 Desktop App). You can safely store data.json as an encrypted, offline backup of your
-vault knowing you will always be able to decrypt it.
+vault, knowing you will always be able to decrypt it.
 
-To determine the location of the data.json file see:
+To determine the location of the data.json file, see:
 https://bitwarden.com/help/data-storage/#on-your-local-machine
 
 **Note**: BitwardenDecrypt does not work with Bitwarden Encrypted JSON Exports.
@@ -21,7 +21,7 @@ Outputs JSON containing:
 - Identities
 - Sends *(Optional)*
 
-**Note**-d: Outputs (almost) all key/value pairs, including ones you probably don't care
+**Note**: Outputs (almost) all key/value pairs, including ones you probably don't care
 about.
 
 ### Installation:
@@ -48,7 +48,7 @@ options:
   --output OUTPUTFILE  Saves decrypted output to OUTPUTFILE (default: None)
 ```
 
-The program will prompt you for the password interactively. This can be either the
+The program will interactively prompt you for the password. This can be either the
 master password or the password used to encrypt the JSON file.
 
 ## Donate
@@ -68,7 +68,7 @@ I.e. No verification of the MAC before decrypting.~~ Now verifies the MAC.
 
 ## To Do
 [ ] Nothing.
-Hopefully Bitwarden will implement an [encrypted export](https://community.bitwarden.com/t/encrypted-export/235) and this script can become obsolete.
+Hopefully, Bitwarden will implement an [encrypted export](https://community.bitwarden.com/t/encrypted-export/235), and this script can become obsolete.
 
 ## License
 
