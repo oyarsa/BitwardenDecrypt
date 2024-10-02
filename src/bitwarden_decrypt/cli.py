@@ -52,36 +52,16 @@ import sys
 import uuid
 from collections import OrderedDict
 
-# This script depends on the 'cryptography' package
-# pip install cryptography
-try:
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import ciphers, hashes, hmac, kdf, padding
-    from cryptography.hazmat.primitives.asymmetric import (
-        padding as asymmetricpadding,
-    )
-    from cryptography.hazmat.primitives.asymmetric import (
-        rsa,
-    )
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.serialization import load_der_private_key
-
-except ModuleNotFoundError:
-    print("This script depends on the 'cryptography' package")
-    print("pip install cryptography")
-    sys.exit(1)
-
-# This script depends on the 'argon2-cffi' package
-# pip install argon2-cffi
-try:
-    import argon2
-
-except ModuleNotFoundError:
-    print("This script depends on the 'argon2-cffi' package")
-    print("pip install argon2-cffi")
-    sys.exit(1)
+import argon2
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, hmac, padding
+from cryptography.hazmat.primitives.asymmetric import (
+    padding as asymmetricpadding,
+)
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.serialization import load_der_private_key
 
 BitwardenSecrets = {}
 
@@ -237,7 +217,7 @@ def decryptProtectedSymmetricKey(CipherString, masterkey, mastermac):
 
     try:
         cleartext = unpadder.update(decrypted) + unpadder.finalize()
-    except Exception as e:
+    except Exception:
         print()
         print("Wrong Password. Could Not Decode Protected Symmetric Key.")
         sys.exit(1)
@@ -305,7 +285,7 @@ def decryptCipherString(CipherString, key, mackey):
 
         try:
             cleartext = cleartext.decode("utf-8")
-        except UnicodeDecodeError as e:
+        except UnicodeDecodeError:
             try:
                 # Try to decrypt CipherString as an Attachment Protected Symmetric Key
                 cleartext = decryptProtectedSymmetricKey(
@@ -313,7 +293,7 @@ def decryptCipherString(CipherString, key, mackey):
                     BitwardenSecrets["GeneratedEncryptionKey"],
                     BitwardenSecrets["GeneratedMACKey"],
                 )[0].hex()
-            except Exception as e:
+            except Exception:
                 cleartext = f"ERROR Decrypting: {CipherString}"
 
         return cleartext
@@ -398,7 +378,7 @@ def checkFileFormatVersion(options):
     except FileNotFoundError:
         print(f"ERROR: {options.inputfile} not found.")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         print(f"ERROR: An error occurred reading: {options.inputfile}")
         sys.exit(1)
 
@@ -573,7 +553,7 @@ def decryptBitwardenJSON(options):
     except FileNotFoundError:
         print(f"ERROR: {options.inputfile} not found.")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         print(f"ERROR: An error occurred reading: {options.inputfile}")
         sys.exit(1)
 
@@ -637,7 +617,7 @@ def decryptBitwardenJSON(options):
                     )
                 else:
                     print(
-                        f"ERROR: Could Not Determine Organization Keys From File Format"
+                        "ERROR: Could Not Determine Organization Keys From File Format"
                     )
 
         supportedGroups = [
@@ -699,7 +679,7 @@ def decryptBitwardenJSON(options):
                                     '"key": ""',
                                 )
 
-                        except Exception as e:
+                        except Exception:
                             print(
                                 f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}"
                             )
@@ -760,7 +740,7 @@ def decryptBitwardenJSON(options):
                     )
                 else:
                     print(
-                        f"ERROR: Could Not Determine Organization Keys From File Format"
+                        "ERROR: Could Not Determine Organization Keys From File Format"
                     )
 
         for a in datafile["data"]:
@@ -834,7 +814,7 @@ def decryptBitwardenJSON(options):
                                             '"key": ""',
                                         )
 
-                                except Exception as e:
+                                except Exception:
                                     print(
                                         f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}"
                                     )
@@ -916,7 +896,7 @@ def decryptBitwardenJSON(options):
                                             match, jsonEscapedString
                                         )
 
-                                except Exception as e:
+                                except Exception:
                                     print(
                                         f"ERROR: Could Not Determine encKey/macKey for: {groupItem.get('id')}"
                                     )
@@ -977,7 +957,7 @@ def main():
         try:
             with open(options.outputfile, "w", encoding="utf-8") as file:
                 file.write(decryptedJSON)
-        except Exception as e:
+        except Exception:
             print(f"ERROR: Writing to {options.outputfile}")
 
     else:
