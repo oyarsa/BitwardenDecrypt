@@ -44,7 +44,13 @@ ignore = [
     "E501",     # Line too long (let ruff format take care of this)
     "TRY003",   # Long messages outside exception class
     "SIM108",   # Use ternary operation instead of if-else block
-    "ISC001"    # Incompatible with the formatter
+    "ISC001",   # Incompatible with the formatter
+    "PLW2901",  # For loop varaibles overwritten
+
+    # This project uses camelCase for everything, so we disable these
+    "N802",     # Function name should be lowercase
+    "N803",     # Argument name should be lowercase
+    "N806",     # Variable in function should be lowercase
 ]
 
 [tool.pyright]
